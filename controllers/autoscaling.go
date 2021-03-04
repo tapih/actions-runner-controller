@@ -257,9 +257,19 @@ func (r *HorizontalRunnerAutoscalerReconciler) calculateReplicasByPercentageRunn
 		scaleDownFactor = sdf
 	}
 
+	var myRunnerReplicaSetList v1alpha1.RunnerReplicaSetList
+	if err := r.List(ctx, &myRunnerReplicaSetList, client.InNamespace(rd.Namespace), client.MatchingFields{runnerSetOwnerKey: rd.Name}); err != nil {
+		return nil, err
+	}
+
+	if len(myRunnerReplicaSetList.Items) != 1 {
+		return nil, fmt.Errorf("the number of RunnerReplicaSet existing should be 1 but %d", len(myRunnerReplicaSetList.Items))
+	}
+
 	// return the list of runners in namespace. Horizontal Runner Autoscaler should only be responsible for scaling resources in its own ns.
+	rs := myRunnerReplicaSetList.Items[0]
 	var runnerList v1alpha1.RunnerList
-	if err := r.List(ctx, &runnerList, client.InNamespace(rd.Namespace)); err != nil {
+	if err := r.List(ctx, &runnerList, client.InNamespace(rs.Namespace), client.MatchingFields{runnerSetOwnerKey: rs.Name}); err != nil {
 		return nil, err
 	}
 	runnerMap := make(map[string]struct{})
