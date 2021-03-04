@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/summerwind/actions-runner-controller/api/v1alpha1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -257,17 +258,22 @@ func (r *HorizontalRunnerAutoscalerReconciler) calculateReplicasByPercentageRunn
 		scaleDownFactor = sdf
 	}
 
-	var myRunnerReplicaSetList v1alpha1.RunnerReplicaSetList
-	if err := r.List(ctx, &myRunnerReplicaSetList, client.InNamespace(rd.Namespace), client.MatchingFields{runnerSetOwnerKey: rd.Name}); err != nil {
+	var allRunnerReplicaSets v1alpha1.RunnerReplicaSetList
+	if err := r.List(ctx, &allRunnerReplicaSets, client.InNamespace(rd.Namespace)); err != nil {
 		return nil, err
 	}
 
-	if len(myRunnerReplicaSetList.Items) != 1 {
-		return nil, fmt.Errorf("the number of RunnerReplicaSet existing should be 1 but %d", len(myRunnerReplicaSetList.Items))
+	var rs *v1alpha1.RunnerReplicaSet
+	for _, s := range allRunnerReplicaSets.Items {
+		if metav1.IsControlledBy(&s, &rd) {
+			if rs != nil {
+				return nil, fmt.Errorf("the number of RunnerReplicaSet existing should be 1")
+			}
+			rs = &s
+		}
 	}
 
 	// return the list of runners in namespace. Horizontal Runner Autoscaler should only be responsible for scaling resources in its own ns.
-	rs := myRunnerReplicaSetList.Items[0]
 	var runnerList v1alpha1.RunnerList
 	if err := r.List(ctx, &runnerList, client.InNamespace(rs.Namespace), client.MatchingFields{runnerSetOwnerKey: rs.Name}); err != nil {
 		return nil, err
